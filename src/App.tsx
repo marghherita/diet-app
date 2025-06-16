@@ -1,87 +1,148 @@
-import { Redirect, Route } from 'react-router-dom';
+import React, { useEffect, useState } from "react";
 import {
   IonApp,
-  IonIcon,
+  IonHeader,
+  IonToolbar,
+  IonTitle,
+  IonContent,
+  IonCard,
+  IonCardHeader,
+  IonCardTitle,
+  IonCardContent,
+  IonList,
+  IonItem,
   IonLabel,
-  IonRouterOutlet,
-  IonTabBar,
-  IonTabButton,
-  IonTabs,
-  setupIonicReact
-} from '@ionic/react';
-import { IonReactRouter } from '@ionic/react-router';
-import { ellipse, square, triangle } from 'ionicons/icons';
-import Tab1 from './pages/Tab1';
-import Tab2 from './pages/Tab2';
-import Tab3 from './pages/Tab3';
-
-/* Core CSS required for Ionic components to work properly */
-import '@ionic/react/css/core.css';
-
-/* Basic CSS for apps built with Ionic */
-import '@ionic/react/css/normalize.css';
-import '@ionic/react/css/structure.css';
-import '@ionic/react/css/typography.css';
-
-/* Optional CSS utils that can be commented out */
-import '@ionic/react/css/padding.css';
-import '@ionic/react/css/float-elements.css';
-import '@ionic/react/css/text-alignment.css';
-import '@ionic/react/css/text-transformation.css';
-import '@ionic/react/css/flex-utils.css';
-import '@ionic/react/css/display.css';
-
-/**
- * Ionic Dark Mode
- * -----------------------------------------------------
- * For more info, please see:
- * https://ionicframework.com/docs/theming/dark-mode
- */
-
-/* import '@ionic/react/css/palettes/dark.always.css'; */
-/* import '@ionic/react/css/palettes/dark.class.css'; */
-import '@ionic/react/css/palettes/dark.system.css';
-
-/* Theme variables */
-import './theme/variables.css';
+  IonPage,
+  IonSegment,
+  IonSegmentButton,
+  IonText,
+  setupIonicReact,
+  SegmentValue,
+  IonAccordionGroup,
+  IonAccordion,
+} from "@ionic/react";
+import "@ionic/react/css/core.css";
+import { BASE_URL } from "./lib/costants";
+import { Diet, Alimento } from "./models/diet";
+import { AlternativeMap, AlternativeItem } from "./models/alternatives";
 
 setupIonicReact();
 
-const App: React.FC = () => (
-  <IonApp>
-    <IonReactRouter>
-      <IonTabs>
-        <IonRouterOutlet>
-          <Route exact path="/tab1">
-            <Tab1 />
-          </Route>
-          <Route exact path="/tab2">
-            <Tab2 />
-          </Route>
-          <Route path="/tab3">
-            <Tab3 />
-          </Route>
-          <Route exact path="/">
-            <Redirect to="/tab1" />
-          </Route>
-        </IonRouterOutlet>
-        <IonTabBar slot="bottom">
-          <IonTabButton tab="tab1" href="/tab1">
-            <IonIcon aria-hidden="true" icon={triangle} />
-            <IonLabel>Tab 1</IonLabel>
-          </IonTabButton>
-          <IonTabButton tab="tab2" href="/tab2">
-            <IonIcon aria-hidden="true" icon={ellipse} />
-            <IonLabel>Tab 2</IonLabel>
-          </IonTabButton>
-          <IonTabButton tab="tab3" href="/tab3">
-            <IonIcon aria-hidden="true" icon={square} />
-            <IonLabel>Tab 3</IonLabel>
-          </IonTabButton>
-        </IonTabBar>
-      </IonTabs>
-    </IonReactRouter>
-  </IonApp>
-);
+const App: React.FC = () => {
+  const [dieta, setDieta] = useState<Diet>({});
+  const getCurrentDay = () => {
+    const days = ['domenica', 'lunedi', 'martedi', 'mercoledi', 'giovedi', 'venerdi', 'sabato'];
+    return days[new Date().getDay()];
+  };
+  const [giornoSelezionato, setGiornoSelezionato] = useState<SegmentValue>(getCurrentDay());
+  const [errore, setErrore] = useState<string | null>(null);
+  const [alternativeMap, setAlternativeMap] = useState<AlternativeMap>({});
+
+  useEffect(() => {
+    fetch(`${BASE_URL}/api/diet`)
+      .then((res) => {
+        if (!res.ok) throw new Error("API non disponibile");
+        return res.json();
+      })
+      .then((data) => {
+        setDieta(data);
+        const today = getCurrentDay();
+        if (data[today]) {
+          setGiornoSelezionato(today);
+        } else {
+          setGiornoSelezionato(Object.keys(data)[0]); // fallback
+        }
+      })
+      .catch((err) => setErrore(err.message));
+  }, []);
+
+  const fetchAlternatives = async (codice_alt: string) => {
+    if (alternativeMap[codice_alt]) return;
+    console.log(codice_alt);
+    try {
+      const res = await fetch(`${BASE_URL}/api/alternatives?id=${codice_alt}`);
+      if (res.ok) {
+        const data: AlternativeItem[] = await res.json();
+        setAlternativeMap((prev) => ({ ...prev, [codice_alt]: data }));
+      }
+    } catch (err) {
+      console.error("Errore nel recupero alternative:", err);
+    }
+  };
+
+  const giorniDisponibili = Object.keys(dieta);
+
+  return (
+    <IonApp>
+      <IonPage className="bg-red-500">
+        <IonHeader>
+          <IonToolbar>
+            <IonTitle className="text-red-500">Easy Diet</IonTitle>
+          </IonToolbar>
+        </IonHeader>
+
+        <IonContent className="ion-padding">
+          {errore && <IonText color="danger">Errore: {errore}</IonText>}
+
+          <IonSegment
+            value={giornoSelezionato}
+            onIonChange={(e) => setGiornoSelezionato(e.detail.value!)}
+          >
+            {giorniDisponibili.map((g) => (
+              <IonSegmentButton key={g} value={g}>
+                <IonLabel>{g.charAt(0).toUpperCase() + g.slice(1)}</IonLabel>
+              </IonSegmentButton>
+            ))}
+          </IonSegment>
+
+          {dieta[giornoSelezionato]?.map((pasto, index) => (
+            <IonCard key={index}>
+              <IonCardHeader>
+                <IonCardTitle>{pasto.pasto.toUpperCase()}</IonCardTitle>
+              </IonCardHeader>
+              <IonCardContent>
+                {pasto.alimenti.map((alimento: Alimento, idx: number) => (
+                  <IonList key={idx}>
+                    {alimento.codice_alt ? (
+                      <IonAccordionGroup>
+                        <IonAccordion>
+                          <IonItem slot="header" button onClick={() => fetchAlternatives(alimento.codice_alt)}>
+                            <IonLabel>
+                              <strong>{alimento.alimento}</strong> — {alimento.quantità}
+                            </IonLabel>
+                          </IonItem>
+                          <IonList slot="content">
+                            {alternativeMap[alimento.codice_alt]?.map((alt: AlternativeItem, i: number) => (
+                              <IonItem key={i}>
+                                <IonLabel>
+                                  ➤ {alt.alimento} — {alt.quantità}
+                                </IonLabel>
+                              </IonItem>
+                            ))}
+                          </IonList>
+                        </IonAccordion>
+                      </IonAccordionGroup>
+                    ) : (
+                      <IonItem lines="none">
+                        <IonLabel>
+                          <strong>{alimento.alimento}</strong> — {alimento.quantità}
+                        </IonLabel>
+                      </IonItem>
+                    )}
+                  </IonList>
+                ))}
+              </IonCardContent>
+            </IonCard>
+          ))}
+
+          {!dieta[giornoSelezionato] && !errore && <p>Caricamento...</p>}
+          {dieta[giornoSelezionato]?.length === 0 && (
+            <IonText color="medium">Nessun pasto previsto per oggi 🎉</IonText>
+          )}
+        </IonContent>
+      </IonPage>
+    </IonApp>
+  );
+};
 
 export default App;
